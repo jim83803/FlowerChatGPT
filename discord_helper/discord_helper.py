@@ -1,3 +1,4 @@
+import random
 import re
 import discord
 from discord.ext import commands
@@ -31,19 +32,24 @@ class DiscordHelper():
         self.bot.add_listener(self.on_ready, 'on_ready')
         self.bot.add_listener(self.on_message, 'on_message')
 
-        @self.bot.command()
+        @self.bot.command(name='set_char', brief='設置小花的角色設定', help='設置小花的角色設定')
         async def set_char(ctx: commands.Context, *, message: str):
             print(f'!set_char {message}')
             if self.on_set_char_listener is not None:
                 self.on_set_char_listener(message)
 
-        @self.bot.command()
+        @self.bot.command(name='clear_user_messages', brief="清除歷史文本", help="這可以讓小花恢復正常")
         async def clear_user_messages(ctx: commands.Context):
             print(f'!clear_user_messages')
             if self.on_clear_user_messages is not None:
                 self.on_clear_user_messages()
             await ctx.send('Done.')
-            
+
+        @self.bot.command(name='dice', brief="骰骰子", help="可以決定骰子數量 例如:!dice 3")
+        async def dice(ctx: commands.Context, dice_count: int = 1):
+            dice_results = [random.randint(1, 6) for _ in range(dice_count)]
+            await ctx.send(f'你骰了 {dice_count} 顆骰子，結果是: {dice_results}，總和是: {sum(dice_results)}')
+
     def run(self):
         self.bot.run(self.token)
 
