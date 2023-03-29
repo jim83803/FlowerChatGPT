@@ -56,9 +56,6 @@ class RobotController(IDiscordHelper):
         is_message_from_robot = ctx.message.author.bot
         is_robot_name_in_message = self.discord_helper.robot_name in ctx.message.content
         is_robot_mentioned = self.discord_helper.bot.user.mentioned_in(ctx.message)
-        print('is_message_from_robot {is_message_from_robot}')
-        print('is_robot_name_in_message {is_robot_name_in_message}')
-        print('is_robot_mentioned {is_robot_mentioned}')
         return (not is_message_from_robot) and (is_robot_name_in_message or is_robot_mentioned)
 
     async def process_message(self, ctx: commands.Context, message:str, histroy: list[dict[str, str]]):
