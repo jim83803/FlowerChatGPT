@@ -3,7 +3,6 @@ import openai
 import tiktoken
 
 class ChatGPTHelper:
-
     def __init__(self, openai_api_key: str, model: str, temperature: float, max_tokens: int):
         openai.api_key = openai_api_key
         self.model = model
@@ -15,13 +14,11 @@ class ChatGPTHelper:
         try:
             encoding = tiktoken.encoding_for_model(model)
         except KeyError:
-            #print("Warning: model not found. Using cl100k_base encoding.")
             encoding = tiktoken.get_encoding("cl100k_base")
+
         if model == "gpt-3.5-turbo":
-            #print("Warning: gpt-3.5-turbo may change over time. Returning num tokens assuming gpt-3.5-turbo-0301.")
             return self.num_tokens_from_messages(messages, model="gpt-3.5-turbo-0301")
         elif model == "gpt-4":
-            #print("Warning: gpt-4 may change over time. Returning num tokens assuming gpt-4-0314.")
             return self.num_tokens_from_messages(messages, model="gpt-4-0314")
         elif model == "gpt-3.5-turbo-0301":
             tokens_per_message = 4  # every message follows <|start|>{role/name}\n{content}<|end|>\n
@@ -31,6 +28,7 @@ class ChatGPTHelper:
             tokens_per_name = 1
         else:
             raise NotImplementedError(f"""num_tokens_from_messages() is not implemented for model {model}. See https://github.com/openai/openai-python/blob/main/chatml.md for information on how messages are converted to tokens.""")
+
         num_tokens = 0
         for message in messages:
             num_tokens += tokens_per_message
@@ -41,12 +39,12 @@ class ChatGPTHelper:
         num_tokens += 3  # every reply is primed with <|start|>assistant<|message|>
         return num_tokens
 
-    # send chat-completion to openai with default values
     def send_messages_to_openai(self, messages):
+        """Send chat-completion to OpenAI with default values."""
         return self.send_messages_to_openai_with_params(self.model, messages, self.temperature, self.max_tokens)
 
-    # send chat-completion to openai
     def send_messages_to_openai_with_params(self, model, messages, temperature, max_tokens):
+        """Send chat-completion to OpenAI."""
         return openai.ChatCompletion.create(
             model = model,
             messages = messages,
