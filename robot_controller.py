@@ -6,7 +6,7 @@ from discord_helper.i_discord_helper import IDiscordHelper
 import os
 import json
 
-class RobotController(IDiscordHelper):
+class RobotController():
     MODEL = 'gpt-3.5-turbo'
     TEMPERATURE = 1.0
 
@@ -22,10 +22,8 @@ class RobotController(IDiscordHelper):
         self.chatgpt_helper = ChatGPTHelper(openai_api_key, model, temperature, max_tokens)
 
         # Set listners
-        self.discord_helper.on_ready_listener = self.on_ready_listener
-        self.discord_helper.on_message_listener = self.on_message_listener
-        self.discord_helper.on_set_char_listener = self.on_set_char_listener
-        self.discord_helper.on_clear_user_messages = self.on_clear_user_messages
+        self.add_robot_commands()
+        self.add_robot_events()
 
         # Initialize messages
         self.messages = [
@@ -33,31 +31,99 @@ class RobotController(IDiscordHelper):
             #{"role": "assistant", "content": self.initial_assistant},
         ]
 
+    # Add event listeners to the Discord bot
+    def add_robot_events(self):
+        # When the Discord bot is ready, print a message
+        @self.discord_helper.bot.event
+        async def on_ready():
+            print(f'{self.discord_helper.get_bot_username()} has connected to Discord!')
+
+        @self.discord_helper.bot.event
+        async def on_message(message: discord.Message) -> None:
+            # Check if the message is a command
+            if message.content.startswith('!'):
+                await self.discord_helper.bot.process_commands(message)
+                return
+
+            # Check if the message need to be processed
+            if not await self.check_if_message_need_to_be_processed(message): return
+
+            # Read history from file of json.
+            if os.path.exists(self.history_file):
+                with open(self.history_file, "r", encoding='utf-8') as f:
+                    self.messages = json.load(f)
+
+            # Process the message
+            try:
+                self.discord_helper.is_input_enabled = False
+                ctx = await self.discord_helper.get_context(message)
+                await self.process_message(ctx, message.content, self.messages)
+            finally:
+                self.discord_helper.is_input_enabled = True
+
+            # save the latest history
+            with open(self.history_file, "w", encoding='utf-8') as f:
+                json.dump(self.messages, f, ensure_ascii=False, indent=4)
+
+    # Add command listeners to the Discord bot
+    def add_robot_commands(self):
+        @self.discord_helper.bot.command(name="set_char", brief=f'設置小花的角色設定', help='記得在設定完之後要輸入!clear_user_messages清除歷史文本')
+        async def set_char(ctx: commands.Context, *, message: str):
+            self.initial_system = message
+            if self.messages[0]['role'] == 'system':
+                self.messages[0]['content'] = message
+            with open(self.history_file, "w", encoding='utf-8') as f:
+                json.dump(self.messages, f, ensure_ascii=False, indent=4)
+            await self.discord_helper.send_message(ctx, f"{self.discord_helper.robot_name}的角色設定已經更新為：{message}")
+
+        @self.discord_helper.bot.command(name="clear_user_messages", brief='清除小花的歷史文本', help='這可以讓小花恢復正常')
+        async def clear_user_messages(ctx: commands.Context):
+            self.messages.clear()
+            self.messages.append({'role': 'system', 'content': self.initial_system})
+            #self.messages.append({'role': 'assistant', 'content': self.initial_assistant})
+            with open(self.history_file, "w", encoding='utf-8') as f:
+                json.dump(self.messages, f, ensure_ascii=False, indent=4)
+            await self.discord_helper.send_message(ctx, f"歷史紀錄已經清除。")
+
+        @self.discord_helper.bot.command(name="dice", brief='擲骰子', help='可以決定骰子數量 例如:!dice 3')
+        async def dice(ctx: commands.Context, dice_count: int = 1):
+            dice_results = [random.randint(1, 6) for _ in range(dice_count)]
+            await self.discord_helper.send_message(ctx, f'你骰了 {dice_count} 顆骰子，結果是: {dice_results}，總和是: {sum(dice_results)}')
+
     # Run the Discord bot
     def run(self):
         self.discord_helper.run()
 
-    # Adjust the number of tokens according to the token size
-    def adjust_messages_by_token_size(self, max_tokens, reponse_token, messages):
-        num_tokens = self.chatgpt_helper.num_tokens_from_messages(messages, "gpt-3.5-turbo")
-        while num_tokens > max_tokens - reponse_token:
-            if len(messages) >= 3: messages.pop(1)
-            num_tokens = self.chatgpt_helper.num_tokens_from_messages(messages, "gpt-3.5-turbo")
-        return num_tokens
-
-    # Check if the channel is valid for the bot to respond
+    # Check if the channel is valid, check if the channel is a guild channel or the developer channel.
     def is_channel_valid(self, ctx: commands.Context):
         is_channel_developer = ctx.author.id == 414075282757255178
         is_channel_guild = ctx.guild is not None
         return is_channel_guild or is_channel_developer
 
-    # Check if the message is valid for the bot to respond
+    # Check if the message is valid, ignore messages from bots, and check if the robot name or robot mention is in the message
     def is_message_valid(self, ctx: commands.Context):
         is_message_from_robot = ctx.message.author.bot
         is_robot_name_in_message = self.discord_helper.robot_name in ctx.message.content
         is_robot_mentioned = self.discord_helper.bot.user.mentioned_in(ctx.message)
         return (not is_message_from_robot) and (is_robot_name_in_message or is_robot_mentioned)
 
+    # Check if the message need to be processed, ignore messages from bots, and check if the channel and message are valid, and check if the bot is currently able to receive messages
+    async def check_if_message_need_to_be_processed(self, message: discord.Message) -> bool:
+        #Ignore messages from bots
+        if (message.author.bot): return False
+
+        #Check if the channel is valid for the bot to respond
+        ctx = await self.discord_helper.get_context(message)
+        if not (self.is_channel_valid(ctx) and self.is_message_valid(ctx)): return False
+
+        #Check if the bot is currently able to receive messages
+        if not self.discord_helper.is_input_enabled:
+            await message.reply('I am currently busy and cannot receive messages at the moment. Please send me a message later.')
+            return False
+
+        return True
+
+    # Process the message, prepare the message for chatgpt, and send the message to chatgpt
     async def process_message(self, ctx: commands.Context, message:str, histroy: list[dict[str, str]]):
         # Prepare user message
         username = ctx.author.display_name
@@ -67,7 +133,7 @@ class RobotController(IDiscordHelper):
         print(self.messages[-1])
 
         # Adjust token size
-        num_tokens = self.adjust_messages_by_token_size(self.chatgpt_helper.max_tokens, 300+1, self.messages)
+        num_tokens = self.chatgpt_helper.adjust_messages_by_token_size(self.chatgpt_helper.max_tokens, 300+1, self.messages)
         print(num_tokens)
 
         async with ctx.typing():
@@ -89,50 +155,3 @@ class RobotController(IDiscordHelper):
 
             # respond message to discord helper.
             await self.discord_helper.send_message(ctx, assistant_reply)
-
-    # When the Discord bot is ready, print a message
-    async def on_ready_listener(self) -> None:
-        """
-        This method is part of the IDiscordHelper interface.
-        It is called when the Discord bot is ready.
-        """
-        print(f'{self.discord_helper.get_bot_username()} has connected to Discord!')
-
-    # When discord helper recieve a message, send to chatgpt helper.
-    async def on_message_listener(self, message: str, ctx: commands.Context) -> None:
-        """
-        This method is part of the IDiscordHelper interface.
-        It is called when the Discord bot receives a message.
-        """
-
-        if not (self.is_channel_valid(ctx) and self.is_message_valid(ctx)):
-            return
-
-        # Read history from file of json.
-        if os.path.exists(self.history_file):
-            with open(self.history_file, "r", encoding='utf-8') as f:
-                self.messages = json.load(f)
-
-        try:
-            self.discord_helper.is_input_enabled = False
-            await self.process_message(ctx, message, self.messages)
-        finally:
-            self.discord_helper.is_input_enabled = True
-
-        # save the latest history
-        with open(self.history_file, "w", encoding='utf-8') as f:
-            json.dump(self.messages, f, ensure_ascii=False, indent=4)
-
-    def on_set_char_listener(self, message):
-        self.initial_system = message
-        if self.messages[0]['role'] == 'system':
-            self.messages[0]['content'] = message
-        with open(self.history_file, "w", encoding='utf-8') as f:
-            json.dump(self.messages, f, ensure_ascii=False, indent=4)
-
-    def on_clear_user_messages(self):
-        self.messages.clear()
-        self.messages.append({'role': 'system', 'content': self.initial_system})
-        #self.messages.append({'role': 'assistant', 'content': self.initial_assistant})
-        with open(self.history_file, "w", encoding='utf-8') as f:
-            json.dump(self.messages, f, ensure_ascii=False, indent=4)
