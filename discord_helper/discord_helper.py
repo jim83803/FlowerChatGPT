@@ -42,6 +42,24 @@ class DiscordHelper():
     async def get_context(self, message: discord.Message):
         return await self.bot.get_context(message)
 
+    # Get channel from channel id
+    def get_channel_by_id(self, channel_id: int):
+        return self.bot.get_channel(channel_id)
+
+    # Get channel from channel name
+    def get_channel_by_name(self, channel_name: str):
+        for channel in self.bot.get_all_channels():
+            if channel.name == channel_name:
+                return channel
+        return None
+
+    # Get channel id by name
+    def get_channel_id_by_name(self, channel_name: str):
+        for channel in self.bot.get_all_channels():
+            if channel.name == channel_name:
+                return channel.id
+        return None
+
     # Send message to the context that the message was received from
     async def send_message(self, ctx: commands.Context, message: str):
         await ctx.send(message)
