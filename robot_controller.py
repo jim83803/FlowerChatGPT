@@ -10,7 +10,7 @@ class RobotController():
     MODEL = 'gpt-3.5-turbo'
     TEMPERATURE = 1.0
 
-    def __init__(self, discord_robot_name: str, discord_token: str, openai_api_key: str, model: str, temperature: float, max_tokens: int):
+    def __init__(self, discord_robot_name: str, discord_token: str, openai_api_key: str, model: str, temperature: float, max_tokens: int, max_response_tokens):
         self.history_file = 'history.json'
         self.todo_features_file = 'todo_features.json'
         self.wish_list_file = 'wish_list.json'
@@ -55,7 +55,7 @@ class RobotController():
 
         # Create discord helper and chatgpt helper instances
         self.discord_helper = DiscordHelper(discord_token, discord_robot_name)
-        self.chatgpt_helper = ChatGPTHelper(openai_api_key, model, temperature, max_tokens)
+        self.chatgpt_helper = ChatGPTHelper(openai_api_key, model, temperature, max_tokens, max_response_tokens)
 
         # Set listners
         self.add_robot_commands()
@@ -323,16 +323,17 @@ class RobotController():
         print(self.messages[-1])
 
         # Adjust token size
-        num_tokens = self.chatgpt_helper.adjust_messages_by_token_size(self.chatgpt_helper.max_tokens, 300+1, self.messages)
+        num_tokens = self.chatgpt_helper.adjust_messages_by_token_size(self.chatgpt_helper.max_tokens, self.chatgpt_helper.max_response_tokens, self.messages)
         print(num_tokens)
 
         async with ctx.typing():
         # Send message to chatgpt
             try:
-                if ctx.message.channel.id == 1068827317243232288:
-                    response = self.chatgpt_helper.send_messages_to_openai_with_params(self.chatgpt_helper.model, self.messages, self.chatgpt_helper.temperature, 100)
-                else:
-                    response = self.chatgpt_helper.send_messages_to_openai(self.messages)
+                #if ctx.message.channel.id == 1068827317243232288:
+                #    response = self.chatgpt_helper.send_messages_to_openai_with_params(self.chatgpt_helper.model, self.messages, self.chatgpt_helper.temperature, 100)
+                #else:
+                #    response = self.chatgpt_helper.send_messages_to_openai(self.messages)
+                response = self.chatgpt_helper.send_messages_to_openai(self.messages)
             except Exception as e:
                 print(f"Error: {e}")
                 await self.discord_helper.send_message(ctx, f"Sorry, I met an issue, please try again later.\n{self.messages[-1]}")

@@ -3,11 +3,12 @@ import openai
 import tiktoken
 
 class ChatGPTHelper:
-    def __init__(self, openai_api_key: str, model: str, temperature: float, max_tokens: int):
+    def __init__(self, openai_api_key: str, model: str, temperature: float, max_tokens: int, max_response_tokens: int):
         openai.api_key = openai_api_key
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.max_response_tokens = max_response_tokens
 
     # Calculate the number of tokens used by a list of messages
     def calculate_token_counts(self, messages: List[Dict[str, str]], model: str = "gpt-3.5-turbo-0301") -> int:
@@ -42,15 +43,16 @@ class ChatGPTHelper:
 
     # Adjust the number of tokens according to the token size
     def adjust_messages_by_token_size(self, max_tokens: int, reponse_token: int, messages: List[Dict[str, str]]) -> int:
+        print(f"max_tokens: {max_tokens}, reponse_token: {reponse_token}, messages: {messages}")
         num_tokens = self.calculate_token_counts(messages, "gpt-3.5-turbo")
         while num_tokens > max_tokens - reponse_token:
-            if len(messages) >= 3: messages.pop(1)
+            if len(messages) >= 2: messages.pop(1)
             num_tokens = self.calculate_token_counts(messages, "gpt-3.5-turbo")
         return num_tokens
 
     # Send messages to OpenAI and return the response, using the default parameters
     def send_messages_to_openai(self, messages: List[Dict[str, str]]) -> Dict[str, str]:
-        return self.send_messages_to_openai_with_params(self.model, messages, self.temperature, self.max_tokens)
+        return self.send_messages_to_openai_with_params(self.model, messages, self.temperature, self.max_tokens - self.max_response_tokens)
 
     # Send messages to OpenAI and return the response
     def send_messages_to_openai_with_params(self, model: str, messages: List[Dict[str, str]], temperature: float, max_tokens: int) -> Dict[str, str]:
